@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+.tts_mic.json
+tesseract/*
+!tesseract/PUT_TESSERACT_FILES_HERE.txt

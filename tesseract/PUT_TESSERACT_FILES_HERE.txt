@@ -1,0 +1,8 @@
+OPTIONAL. To bundle Tesseract with your exe so nobody has to install it:
+
+1. Install Tesseract on your own PC (link in SETUP.txt).
+2. Open  C:\Program Files\Tesseract-OCR  and copy EVERYTHING inside it into THIS folder,
+   so that  tesseract\tesseract.exe  exists (plus the .dll files and the tessdata folder).
+3. Run build_exe.bat. It copies this folder into dist\ next to the exe.
+
+If you skip this, the exe still works. It shows a pop-up on start with the Tesseract download link.

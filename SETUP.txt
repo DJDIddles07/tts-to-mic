@@ -1,0 +1,97 @@
+TTS TO MIC
+==========
+Type a message and it is spoken into a virtual microphone, so Discord or a game hears it.
+It can also read new chat messages off your screen and speak them.
+Windows only.
+
+
+WHAT'S IN THIS FOLDER
+---------------------
+tts_mic.py           the program
+build_exe.bat        turns it into "TTS to Mic.exe" (one double-click)
+run_from_source.bat  runs it without building an exe
+requirements.txt     the Python packages it needs (the .bat files install them for you)
+tesseract\           optional: put Tesseract here to bundle it into the exe
+
+
+PART 1: MAKE THE EXE  (you only do this once)
+---------------------------------------------
+1. Install Python 3.10 or newer: https://www.python.org/downloads/
+   IMPORTANT: on the first installer screen, tick "Add python.exe to PATH".
+2. Double-click build_exe.bat and wait (a few minutes, needs internet).
+3. Your exe is in the new "dist" folder:  dist\TTS to Mic.exe
+
+Optional: bundle Tesseract so your friend doesn't have to install it.
+See tesseract\PUT_TESSERACT_FILES_HERE.txt, then run build_exe.bat again.
+If you bundle it, send the whole "dist" folder (zip it), not just the exe.
+
+Just want to try it without building? Double-click run_from_source.bat.
+
+
+PART 2: SETUP ON THE COMPUTER THAT WILL USE IT
+----------------------------------------------
+1. Put the exe in its own folder (for example  C:\Tools\TTS to Mic\ ).
+   Don't run it from inside a zip.
+
+2. Install VB-Cable (the virtual microphone). Skip if you only want to hear it yourself.
+   a. Download from https://vb-audio.com/Cable/
+   b. Unzip it, right-click  VBCABLE_Setup_x64.exe  and choose "Run as administrator".
+   c. Click Install, then RESTART the PC.
+
+3. Install Tesseract OCR (the screen reader). Skip if it came bundled in the dist folder.
+   a. Download the Windows installer from https://github.com/UB-Mannheim/tesseract/wiki
+   b. Run it with the default folder.
+
+4. Start the exe.
+   - Windows may say "Windows protected your PC". Click More info, then Run anyway.
+     (The app listens for your keybinds, which can trip this warning.)
+   - The first start downloads the spell check word list. This needs internet, once.
+   - If something is missing the app shows a "Setup needed" window with links.
+
+
+PART 3: FIRST-TIME SETTINGS
+---------------------------
+In TTS to Mic:
+- Device: pick "CABLE Input (VB-Audio Virtual Cable)".
+- Tick "Also play on my speakers" if you want to hear it too.
+- Pick a Voice and Speed.
+
+In Discord (or the game):
+- Settings > Voice: set the Input Device to "CABLE Output (VB-Audio Virtual Cable)".
+- Turn off automatic input sensitivity if it cuts the voice off.
+
+Test: type a message in TTS to Mic and press Enter. Others should hear it.
+
+
+HOW TO USE IT
+-------------
+Click the "? Help" button inside the app for the commands. The short version:
+- Quick type window: pop it up over a game with a keybind. Enter sends, Esc hides.
+- Show area: drag the blue frame over a chat so the newest message is fully inside it.
+- Auto-read new text: speaks new messages. "Delay" is how long it waits first.
+- Keybinds...: click Set, then press the key. Bind "Read NEW message" to Enter if you
+  type your chat messages in a game and want them read after you send.
+- Spell check dictionary...: add your own words and rules like  fr=for real.
+
+
+TROUBLESHOOTING
+---------------
+Nobody hears me in Discord
+  Check Device is "CABLE Input" here, and Discord's input is "CABLE Output".
+  Restart the PC after installing VB-Cable.
+
+Screen reader says Tesseract not found
+  Install it from the link above and restart the app, or click Browse in the pop-up
+  and choose tesseract.exe.
+
+It reads the wrong text or junk
+  Click "Preview OCR" to see what it sees. Make the blue box taller, keep the newest
+  line fully inside under the blue bar, and raise Text filters > Min confidence.
+
+Spell check is off
+  The log says why. Usually no internet on the first start. Connect and restart.
+  Replacement rules like wasnt=wasn't still work without it.
+
+Reset everything
+  Close the app and delete  .tts_mic.json  in your user folder
+  (C:\Users\YOURNAME\.tts_mic.json).
