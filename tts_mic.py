@@ -1,18 +1,3 @@
-"""
-TTS to Mic v3
-  - Type a message in the chat box and it is spoken into any output device
-    (pick a virtual cable like VB-Cable so other apps hear it as a mic).
-  - Draw a resizable "read area" over any chat box on screen. Toggle it on and
-    new text that appears in that area is OCR'd and spoken automatically.
-  - Global keybinds (keyboard keys or mouse buttons, with optional Shift/Ctrl/Alt).
-  - Text filters: drops low-confidence OCR junk, strips emoji/odd unicode, ignore list.
-  - Quick-type window: small always-on-top box you can pop up over a game with a hotkey.
-
-Install:    pip install pyttsx3 sounddevice numpy pillow pytesseract pynput
-            + install Tesseract OCR (https://github.com/UB-Mannheim/tesseract/wiki)
-Build exe:  run build_exe.bat
-"""
-
 import ctypes
 import difflib
 import gzip
@@ -32,7 +17,7 @@ import wave
 import webbrowser
 from tkinter import ttk, filedialog
 
-# Must happen before Tk is created so screen coordinates match real pixels.
+
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
 except Exception:
@@ -47,16 +32,16 @@ import sounddevice as sd
 import pytesseract
 from PIL import Image, ImageGrab, ImageOps, ImageStat, ImageTk
 
-try:  # makes PyInstaller bundle the Windows voice driver
-    import pyttsx3.drivers.sapi5  # noqa: F401
+try:  
+    import pyttsx3.drivers.sapi5  
 except Exception:
     pass
 
 try:
     from pynput import keyboard, mouse
-    try:  # makes PyInstaller bundle the Windows input backends
-        import pynput.keyboard._win32  # noqa: F401
-        import pynput.mouse._win32  # noqa: F401
+    try:  
+        import pynput.keyboard._win32  
+        import pynput.mouse._win32  
     except Exception:
         pass
     HAVE_PYNPUT = True
@@ -64,14 +49,14 @@ except Exception:
     HAVE_PYNPUT = False
 
 SPELL_ERR = ""
-try:  # optional: pip install pyspellchecker  (only used by the Quick type window)
+try: 
     from spellchecker import SpellChecker
     HAVE_SPELL = True
 except Exception as _e:
     HAVE_SPELL = False
     SPELL_ERR = f"import failed: {_e!r}  (python: {sys.executable})"
 
-# Slang/gaming words that should never be "corrected".
+
 KEEP_WORDS = """lol lmao lmfao rofl gg ggs wp brb afk omg idk imo imho tbh ngl smh rn irl noob noobs
 op nerf nerfed buff buffed xp npc npcs pvp pve dps fps ping lag laggy respawn loot discord vc ok okay
 yeah yea yep nah bruh bro dude gonna wanna gotta ty thx pls plz rip lul kek pog poggers sus mb ez
@@ -99,7 +84,7 @@ def force_focus(win):
         pass
 
 
-# ----------------------------------------------------------------- config ---
+
 def load_config():
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -108,7 +93,7 @@ def load_config():
         return {}
 
 
-# ---------------------------------------------------------------- devices ---
+
 def get_output_devices():
     """Return {display_name: device_index}, preferring the MME host API."""
     hostapis = sd.query_hostapis()
@@ -132,7 +117,7 @@ def get_voices():
     return voices
 
 
-# -------------------------------------------------------------------- tts ---
+
 def synth_to_wav(text, voice_id, rate, path):
     engine = pyttsx3.init()
     if voice_id:
@@ -165,9 +150,9 @@ class Speaker(threading.Thread):
 
     def __init__(self, on_error):
         super().__init__(daemon=True)
-        self.q = queue.PriorityQueue()  # typed messages (0) go before screen reads (1)
+        self.q = queue.PriorityQueue()  
         self._seq = itertools.count()
-        self.gen = 0  # bumped by stop() to cancel everything queued/playing
+        self.gen = 0  
         self.on_error = on_error
 
     def say(self, text, voice_id, rate, device, monitor, priority=1):
@@ -241,7 +226,7 @@ class Speaker(threading.Thread):
                 pass
 
 
-# -------------------------------------------------------------------- ocr ---
+
 OCR_CONFIG = "--psm 6"
 
 
@@ -258,7 +243,7 @@ CABLE_URL = "https://vb-audio.com/Cable/"
 def find_tesseract(saved=None):
     candidates = [
         saved,
-        os.path.join(app_dir(), "tesseract", "tesseract.exe"),  # bundled next to exe
+        os.path.join(app_dir(), "tesseract", "tesseract.exe"), 
         r"C:\Program Files\Tesseract-OCR\tesseract.exe",
         r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
         shutil.which("tesseract"),
@@ -378,18 +363,16 @@ def prep_image(img):
     scale = 3 if big < 1000 else (2 if big < 1800 else 1)
     if scale > 1:
         g = g.resize((w * scale, h * scale), Image.LANCZOS)
-    if ImageStat.Stat(g).mean[0] < 128:  # dark chat theme -> dark text on light
+    if ImageStat.Stat(g).mean[0] < 128:  
         g = ImageOps.invert(g)
     g = ImageOps.autocontrast(g, cutoff=1)
     return ImageOps.expand(g, border=12, fill=255)
-
-
 def ocr_word_lines(prepped):
     """OCR a prepared image -> list of lines, each a list of (word, confidence 0-100)."""
     data = pytesseract.image_to_data(prepped, config=OCR_CONFIG,
                                      output_type=pytesseract.Output.DICT)
     if not any(str(t).strip() for t in data["text"]):
-        # tiny boxes with one short word often come back empty in block mode; retry as a single line
+      
         data = pytesseract.image_to_data(prepped, config="--psm 7",
                                          output_type=pytesseract.Output.DICT)
     lines = {}
@@ -409,41 +392,34 @@ def ocr_word_lines(prepped):
         except (TypeError, ValueError):
             pass
     out = list(lines.items())
-    # The box usually cuts through the top line, leaving half-letters that OCR turns into
-    # junk. If the first line touches the top edge (image has a 12px pad) and there are
-    # other lines, it is a cropped older line: drop it.
     if len(out) > 1 and tops.get(out[0][0], 10 ** 6) <= 12 + 6:
         out = out[1:]
     return [wl for _, wl in out]
 
 
-# --- text cleanup ------------------------------------------------------------
+
 _PUNCT = {0x2018: "'", 0x2019: "'", 0x201C: '"', 0x201D: '"', 0x2013: "-", 0x2014: "-"}
 
 
 def normalize_text(s, strip_symbols=True):
     """Fancy unicode -> plain text, drop emoji/symbols and invisible characters."""
-    s = unicodedata.normalize("NFKC", s).translate(_PUNCT)  # fullwidth, math-bold, circled... -> normal
+    s = unicodedata.normalize("NFKC", s).translate(_PUNCT)  
     out = []
     for ch in s:
         o = ord(ch)
         cat = unicodedata.category(ch)
-        if cat[0] == "C" and ch not in "\n\t":  # control, zero-width, private use, unassigned
+        if cat[0] == "C" and ch not in "\n\t":  
             continue
-        if 0xFE00 <= o <= 0xFE0F:                # emoji variation selectors
+        if 0xFE00 <= o <= 0xFE0F:              
             continue
-        if strip_symbols and o > 127 and cat in ("So", "Sk"):  # emoji, dingbats, skin tones
+        if strip_symbols and o > 127 and cat in ("So", "Sk"):  
             continue
         out.append(ch)
     return re.sub(r"[ \t]+", " ", "".join(out)).strip()
-
-
-# Tesseract often reads the letter "I" as "|", "l" or "!", which the voice then
-# skips. These fixes turn the usual cases back into "I".
 _I_FIXES = [
-    (re.compile(r"(?<![\w])[|lI1!](?=['\u2019](?:m|ll|ve|d)\b)"), "I"),  # l'm  |'ll  1've
-    (re.compile(r"(?<![\w])[|l](?![\w'\u2019])"), "I"),                  # lone | or l
-    (re.compile(r"\|(?=[A-Za-z])"), "I"),                                # |t -> It, |f -> If
+    (re.compile(r"(?<![\w])[|lI1!](?=['\u2019](?:m|ll|ve|d)\b)"), "I"),  
+    (re.compile(r"(?<![\w])[|l](?![\w'\u2019])"), "I"),                 
+    (re.compile(r"\|(?=[A-Za-z])"), "I"),                                
 ]
 _I_WORD = re.compile(r"^I(?:['\u2019](?:m|ll|ve|d))?$")
 
@@ -451,7 +427,7 @@ _I_WORD = re.compile(r"^I(?:['\u2019](?:m|ll|ve|d))?$")
 def fix_ocr_text(line):
     for pattern, repl in _I_FIXES:
         line = pattern.sub(repl, line)
-    line = re.sub(r"[|\u00a6]+", " ", line)  # leftover pipes are noise
+    line = re.sub(r"[|\u00a6]+", " ", line) 
     return re.sub(r"\s+", " ", line).strip()
 
 
@@ -494,7 +470,7 @@ def clean_text(text, flt):
 def keep_word(word, conf, min_conf):
     if conf < 0 or conf >= min_conf:
         return True
-    # a lone "I" or a single digit/letter is short so Tesseract is less sure about it; be more forgiving
+      
     fixed = fix_ocr_text(word)
     if conf < min_conf / 2:
         return False
@@ -506,7 +482,7 @@ def lines_from_words(word_lines, flt):
     for wl in word_lines:
         kept = [w for w, c in wl if keep_word(w, c, flt.min_conf)]
         line = clean_text(" ".join(kept), flt)
-        if sum(c.isalnum() for c in line) >= 1:  # one-character messages like "1" count
+        if sum(c.isalnum() for c in line) >= 1: 
             lines.append(line)
     return lines
 
@@ -520,10 +496,7 @@ def describe_words(word_lines, flt):
             parts.append(t if keep_word(w, c, flt.min_conf) else f"[{t}]")
         out.append(" ".join(parts))
     return "\n".join(out)
-# --- end text cleanup --------------------------------------------------------
 
-
-# --- diff logic (kept self-contained so it can be tested on its own) --------
 def sim(a, b):
     return a == b or difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio() >= 0.85
 
@@ -535,10 +508,10 @@ def new_lines(prev, cur):
     for k in range(min(len(prev), len(cur)), 0, -1):
         if all(sim(prev[len(prev) - k + i], cur[i]) for i in range(k)):
             return cur[k:]
-    # no scroll overlap found: only keep lines that don't look like old ones
+   
     return [c for c in cur if not any(sim(c, p) for p in prev)]
-RN_TIMEOUT = 8.0  # keybind read: give up this long (after the delay) if no new message appears
-SETTLE_EXTRA = 2.0  # after the delay, wait up to this much longer for the chat to stop moving
+RN_TIMEOUT = 8.0 
+SETTLE_EXTRA = 2.0  
 
 
 def same_lines(a, b):
@@ -548,7 +521,7 @@ def same_lines(a, b):
     return all(sim(x, y) for x, y in zip(a, b))
 
 
-SEEN_MAX = 300  # how many recent lines to remember as "already seen"
+SEEN_MAX = 300  
 
 
 def norm_line(line):
@@ -561,20 +534,20 @@ def is_old(line, seen):
     edge of the box, was re-wrapped, or the OCR read a few characters differently."""
     n = norm_line(line)
     if len(n) < 1:
-        return True  # nothing worth reading
+        return True  
     if not seen:
         return False
     blob = " | ".join(seen)
-    if n in seen or (len(n) >= 5 and n in blob):  # exact, or a cropped/partial copy
+    if n in seen or (len(n) >= 5 and n in blob):  
         return True
     if len(n) < 8:
-        return False  # short messages must match exactly; fuzzy matching would merge "that"/"what"
+        return False  
     cutoff = 0.85 if len(n) < 16 else 0.72
     for s in seen:
         if abs(len(s) - len(n)) <= max(len(s), len(n)) * 0.4 and \
                 difflib.SequenceMatcher(None, s, n).ratio() >= cutoff:
             return True
-    if len(n) >= 8:  # most of the line appears somewhere in what was seen (re-wrapped text)
+    if len(n) >= 8: 
         m = difflib.SequenceMatcher(None, blob, n, autojunk=False).find_longest_match(0, len(blob), 0, len(n))
         if m.size >= 0.8 * len(n):
             return True
@@ -592,10 +565,10 @@ def is_own_echo(line, own_texts):
         if len(own) >= 6 and difflib.SequenceMatcher(None, own, low[-len(own) - 6:]).ratio() >= 0.85:
             return True
     return False
-# --- end diff logic ----------------------------------------------------------
 
 
-# --- hotkeys -----------------------------------------------------------------
+
+
 MOD_ORDER = ("ctrl", "shift", "alt", "win")
 
 
@@ -689,7 +662,7 @@ class HotkeyManager:
             self.capture_action = None
             self.lone_mod = None
 
-    # -- internals (call with self.lock held)
+   
     def _held(self):
         return {g for g in (mod_group(n) for n in self.pressed) if g}
 
@@ -704,18 +677,18 @@ class HotkeyManager:
             if b.get("key") == key_id and set(b.get("mods", [])) == set(mods):
                 self.emit("fire", action)
 
-    # -- listener callbacks
+  
     def _on_press(self, key):
         name = key_name(key)
         with self.lock:
-            if name in self.pressed:  # auto-repeat while held
+            if name in self.pressed: 
                 return
             self.pressed.add(name)
             g = mod_group(name)
             held = self._held()
             if self.capture_action:
                 if g:
-                    self.lone_mod = name  # becomes the bind if released with nothing else pressed
+                    self.lone_mod = name  
                 else:
                     self.lone_mod = None
                     if name == "esc" and not held:
@@ -743,11 +716,10 @@ class HotkeyManager:
             held = self._held()
             if self.capture_action:
                 if bname in ("left", "right") and not held:
-                    return  # bare left/right clicks would fire constantly; need a modifier
+                    return  
                 self._finish(held, key_id)
                 return
             self._match(key_id, held)
-# --- end hotkeys -------------------------------------------------------------
 
 ACTIONS = [
     ("watch_off", "Auto-read OFF"),
@@ -762,7 +734,7 @@ ACTIONS = [
 ]
 
 
-# ---------------------------------------------------------------- overlay ---
+
 THEMES = {
     "light": dict(bg="#f0f0f0", fg="#000000", field="#ffffff", sel="#0078d4", btn="#e1e1e1",
                   btn_hi="#d0d0d0", line="#adadad", mute="#777777",
@@ -780,8 +752,8 @@ class RegionOverlay(tk.Toplevel):
     KEY = "#010203"
     COLOR = "#00c8ff"
     GRIP = "#ff9500"
-    B = 5      # border thickness
-    BAR = 22   # title bar height
+    B = 5      
+    BAR = 22  
     MINW, MINH = 140, 80
 
     def __init__(self, master, x, y, w, h, on_hide):
@@ -861,7 +833,7 @@ class RegionOverlay(tk.Toplevel):
                 self.x + self.w - self.B, self.y + self.h - self.B)
 
 
-# -------------------------------------------------------------------- app ---
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -881,8 +853,8 @@ class App(tk.Tk):
         self.last_scan = None
         self.pending_since = None
         self._after_id = None
-        self.seen = []        # lowercase lines already seen/spoken (survives scrolling)
-        self.own_texts = []   # things I typed, so their echo in the chat isn't read back
+        self.seen = []       
+        self.own_texts = []   
         self.skip_own_var = tk.BooleanVar(value=self.cfg.get("skip_own", True))
         self.rn_busy = False
         self.spell = None
@@ -900,7 +872,7 @@ class App(tk.Tk):
         self.debug_var = tk.BooleanVar(value=False)
         self._dbg_last = None
 
-        # keybinds
+     
         valid = dict(ACTIONS)
         self.binds = {a: b for a, b in self.cfg.get("binds", {}).items()
                       if a in valid and isinstance(b, dict) and "key" in b}
@@ -944,7 +916,7 @@ class App(tk.Tk):
             self.log("err", "Keybinds are off because 'pynput' isn't installed. Run: pip install pynput")
 
         if not self.spell:
-            if HAVE_SPELL:  # no word list anywhere: make the file automatically (one time)
+            if HAVE_SPELL: 
                 self.log("sys", "Spell check word list not found - downloading it once...")
                 threading.Thread(target=self._fetch_dict, daemon=True).start()
             else:
@@ -954,7 +926,7 @@ class App(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.entry.focus_set()
         has_cable = any("cable" in n.lower() or "vb-audio" in n.lower() for n in self.devices)
-        if not t:  # the screen reader can't work without Tesseract: tell them how to get it
+        if not t:  
             self.log("err", f"Tesseract OCR not found (needed for the screen reader). Get it at {TESS_URL}")
         if not has_cable:
             self.log("sys", f"No virtual audio cable found (needed so other apps hear this as a mic). "
@@ -1067,7 +1039,7 @@ class App(tk.Tk):
         self.chat.see("end")
         self.chat.config(state="disabled")
 
-    # ---- speaking
+
     def speak(self, text, kind):
         dev = self.device_var.get()
         if dev not in self.devices:
@@ -1097,7 +1069,7 @@ class App(tk.Tk):
         self.speaker.stop()
         self.log("sys", "Stopped.")
 
-    # ---- overlay
+   
     def toggle_overlay(self):
         if self.show_var.get():
             self.overlay.deiconify()
@@ -1109,7 +1081,6 @@ class App(tk.Tk):
         self.show_var.set(False)
         self.overlay.withdraw()
 
-    # ---- theme (dark / light)
     def _theme(self):
         return THEMES[self.theme_name]
 
@@ -1132,7 +1103,7 @@ class App(tk.Tk):
         except tk.TclError:
             pass
         for c in w.winfo_children():
-            if c is getattr(self, "overlay", None):  # the read-area frame has its own colours
+            if c is getattr(self, "overlay", None): 
                 continue
             self._theme_tree(c, t)
 
@@ -1191,9 +1162,9 @@ class App(tk.Tk):
         self.cfg["theme"] = self.theme_name
         self.apply_theme()
 
-    # ---- area reading
+   
     def _interval(self):
-        return 0.5  # scan rate is fixed; the single Delay box sets how long to wait before reading
+        return 0.5  
 
     def _delay(self):
         try:
@@ -1227,7 +1198,7 @@ class App(tk.Tk):
             self._start_scan(read_all=False)
         ms = int(self._interval() * 1000)
         if self.pending_since is not None:
-            ms = min(ms, 500)  # new text spotted: re-check quickly while the delay runs out
+            ms = min(ms, 500)  
         self._after_id = self.after(ms, self._tick)
 
     def read_all_now(self):
@@ -1264,14 +1235,14 @@ class App(tk.Tk):
             while True:
                 cur = self._lines_of(mask_grip(ImageGrab.grab(bbox=bbox, all_screens=True)))
                 new = []
-                for l in reversed(cur):  # new chat text is only ever at the bottom
+                for l in reversed(cur): 
                     if is_old(l, seen):
                         break
                     new.insert(0, l)
                 if self.skip_own_var.get():
                     new = [l for l in new if not is_own_echo(l, self.own_texts)]
                 if new and last is not None and same_lines(cur, last):
-                    break  # new text is there and the chat has stopped moving
+                    break  
                 last = cur
                 if time.monotonic() > deadline:
                     break
@@ -1340,7 +1311,7 @@ class App(tk.Tk):
 
         if not self.watching:
             return
-        if self.prev_lines is None:  # first scan = baseline, don't read old text
+        if self.prev_lines is None: t
             self.prev_lines = lines
             self.last_scan = lines
             self.pending_since = None
@@ -1349,13 +1320,9 @@ class App(tk.Tk):
         if not lines:
             return
 
-        stable = same_lines(lines, self.last_scan)  # same text as the scan before = not scrolling
+        stable = same_lines(lines, self.last_scan)  
         self.last_scan = lines
-        # Anything not brand new is old: remember it right away so it can never come back
-        # later as "new" after a scroll, a crop at the box edge, or an OCR wobble.
-        # New chat text only ever appears at the BOTTOM. Walk up from the bottom line and
-        # stop at the first line we've already seen; anything above that (a half-cropped or
-        # mis-read copy of an old line at the top of the box) is never read.
+      
         new = []
         for l in reversed(lines):
             if is_old(l, self.seen):
@@ -1373,21 +1340,18 @@ class App(tk.Tk):
         if not new:
             self.pending_since = None
             if stable:
-                self.prev_lines = lines  # keep the baseline in step with the screen
+                self.prev_lines = lines 
                 self._mark_seen(lines)
             return
 
-        # New text spotted. Wait out the delay (and for the chat to stop moving) so we
-        # read the finished, settled message instead of a half-scrolled frame.
         now = time.monotonic()
         if self.pending_since is None:
             self.pending_since = now
         waited = now - self.pending_since
         delay = self._delay()
-        # Always wait for the chat to stop moving (even with delay 0) so a half-scrolled
-        # frame is never read; give up waiting after SETTLE_EXTRA seconds.
+      
         if waited < delay or (not stable and waited < delay + SETTLE_EXTRA):
-            return  # check again shortly; `new` is recomputed from the latest scan each time
+            return 
         self.pending_since = None
         self.prev_lines = lines
         self._mark_seen(lines)
@@ -1400,7 +1364,7 @@ class App(tk.Tk):
                 self.seen.append(n)
         self.seen = self.seen[-SEEN_MAX:]
 
-    # ---- OCR preview (shows what the reader actually sees)
+   
     def preview_ocr(self):
         if self.scanning:
             return
@@ -1497,7 +1461,7 @@ class App(tk.Tk):
             self.cfg["tesseract"] = p
             self.log("sys", f"Tesseract set to {p}")
 
-    # ---- quick-type window (small always-on-top box to pop up over a game)
+    
     def _build_quick(self):
         win = tk.Toplevel(self)
         win.title("Quick type")
@@ -1534,7 +1498,7 @@ class App(tk.Tk):
         self.cfg["quick_pos"] = self.quick.geometry()
         self.quick.withdraw()
 
-    # ---- personal dictionary for the quick-type spell check
+  
     def _load_spell(self):
         """Build the spell checker from the package's word list, or from en.json.gz next to the app."""
         try:
@@ -1583,7 +1547,7 @@ class App(tk.Tk):
             return False
         if w in self.user_words:
             return False
-        if self.spell.unknown([w]):  # only words the built-in dictionary doesn't already know
+        if self.spell.unknown([w]):  
             self.spell.word_frequency.load_words([w])
             self.user_words = sorted(self.user_words + [w])
             self.save_config()
@@ -1724,10 +1688,10 @@ class App(tk.Tk):
                       yscrollcommand=sb.set, padx=10, pady=6)
         txt.pack(side="left", fill="both", expand=True)
         sb.config(command=txt.yview)
-        col = 200  # px: where the description column starts
+        col = 200  
         txt.tag_configure("h", font=("Segoe UI", 11, "bold"), spacing1=12, spacing3=4)
         txt.tag_configure("p", spacing3=5)
-        txt.tag_configure("r", tabs=(col,), lmargin1=0, lmargin2=col, spacing3=5)  # hanging indent
+        txt.tag_configure("r", tabs=(col,), lmargin1=0, lmargin2=col, spacing3=5)  
         for item in self.HELP:
             if item[0] == "r":
                 txt.insert("end", f"{item[1]}\t{item[2]}\n", "r")
@@ -1769,7 +1733,7 @@ class App(tk.Tk):
             if old is not None:
                 old_key = old.split(" = ")[0].strip().lower()
                 if ok and old_key not in self._entry_keys(raw):
-                    self._remove_item(old)  # renamed: drop the old entry
+                    self._remove_item(old)  
                 if ok or old_key in self._entry_keys(raw):
                     end_edit()
             else:
@@ -1848,7 +1812,7 @@ class App(tk.Tk):
             if self.quick_hide_var.get():
                 self.hide_quick()
 
-    # ---- text filters
+  
     def _add_ignore(self, entry, text_widget):
         word = entry.get().strip()
         if not word:
@@ -1923,7 +1887,7 @@ class App(tk.Tk):
         win.protocol("WM_DELETE_WINDOW", close)
         self._themed(win)
 
-    # ---- keybinds
+ 
     def open_keybinds(self):
         if not self.hk:
             self.log("err", "Keybinds aren't available (pynput missing or failed to start).")
@@ -2006,7 +1970,7 @@ class App(tk.Tk):
         if b and typing and b["key"].startswith("kb:"):
             name = b["key"][3:]
             if len(name) == 1 and not (set(b["mods"]) & {"ctrl", "alt", "win"}):
-                return  # a plain letter bind shouldn't fire while you're typing
+                return 
         if action == "toggle_watch":
             self.watch_var.set(not self.watch_var.get())
             self.toggle_watch()
@@ -2040,7 +2004,7 @@ class App(tk.Tk):
             force_focus(self)
             self.entry.focus_set()
 
-    # ---- shutdown
+  
     def save_config(self):
         ov = self.overlay
         self.cfg.update({
